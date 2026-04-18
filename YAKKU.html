@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YAKKU — KBO 야구공 꾸미기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#f0eee9; height:100%; font-family: 'IBM Plex Sans KR', sans-serif; }
+  * { -webkit-font-smoothing: antialiased; }
+  button { font-family: inherit; }
+  input[type=range] { accent-color: #fff; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="teams.jsx"></script>
+<script type="text/babel" src="ball.jsx"></script>
+<script type="text/babel" src="screen-onboarding.jsx"></script>
+<script type="text/babel" src="screen-editor.jsx"></script>
+<script type="text/babel" src="screen-share.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const TWEAKS = /*EDITMODE-BEGIN*/{
+  "team_id": "kia",
+  "show_all_screens": true
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweaks] = React.useState(TWEAKS);
+  const [editMode, setEditMode] = React.useState(false);
+  const [selectedTeamId, setSelectedTeamId] = React.useState(tweaks.team_id);
+  const [focusScreen, setFocusScreen] = React.useState(null); // null | 'onboarding' | 'editor' | 'share'
+
+  const team = TEAMS.find(t => t.id === selectedTeamId) || TEAMS[0];
+
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setEditMode(true);
+      if (e.data?.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({type:'__edit_mode_available'}, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const setTweak = (k, v) => {
+    const next = {...tweaks, [k]: v};
+    setTweaks(next);
+    if (k === 'team_id') setSelectedTeamId(v);
+    window.parent.postMessage({type:'__edit_mode_set_keys', edits:{[k]:v}}, '*');
+  };
+
+  // Section — shows all 3 phones side by side
+  if (!focusScreen) {
+    return (
+      <>
+        <DesignCanvas minScale={0.3} maxScale={2}>
+          <DCSection title="YAKKU · 야꾸" subtitle="KBO 야구공 꾸미기 앱 · 3개 화면 · 10개 팀 컬러 테마 · 375pt 모바일">
+            <DCArtboard label="01 · Onboarding / 팀 선택" width={402} height={874}>
+              <div style={{position:'relative', width:402, height:874, cursor:'zoom-in'}}
+                onClick={()=>setFocusScreen('onboarding')}>
+                <IOSDevice width={402} height={874} dark={true}>
+                  <OnboardingScreen selectedTeam={team} onSelect={(t)=>setSelectedTeamId(t.id)} />
+                </IOSDevice>
+              </div>
+            </DCArtboard>
+            <DCArtboard label="02 · Editor / 3D 에디터" width={402} height={874}>
+              <div style={{position:'relative', width:402, height:874, cursor:'zoom-in'}}
+                onClick={()=>setFocusScreen('editor')}>
+                <IOSDevice width={402} height={874} dark={true}>
+                  <EditorScreen team={team} onBack={()=>{}} onShare={()=>{}} />
+                </IOSDevice>
+              </div>
+            </DCArtboard>
+            <DCArtboard label="03 · Share / 공유" width={402} height={874}>
+              <div style={{position:'relative', width:402, height:874, cursor:'zoom-in'}}
+                onClick={()=>setFocusScreen('share')}>
+                <IOSDevice width={402} height={874} dark={true}>
+                  <ShareScreen team={team} onBack={()=>{}} />
+                </IOSDevice>
+              </div>
+            </DCArtboard>
+
+            <DCPostIt top={-30} right={-240} rotate={3} width={200}>
+              팀 컬러가 UI 전체에 번져요. 우측 상단 Tweaks에서 팀을 바꿔보세요!
+            </DCPostIt>
+          </DCSection>
+
+          <DCSection title="Flow · 유저 여정" subtitle="Onboarding → Editor → Share — 세 단계로 끝나는 팬 컨텐츠 제작">
+            <DCArtboard label="Team swatches — 10 clubs" width={880} height={180}>
+              <TeamSwatches />
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+
+        {editMode && <TweaksPanel tweaks={tweaks} setTweak={setTweak} />}
+      </>
+    );
+  }
+
+  // Focus mode — one phone big, centered
+  const Screen = focusScreen === 'onboarding' ? OnboardingScreen
+               : focusScreen === 'editor' ? EditorScreen
+               : ShareScreen;
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, background:'#0a0a0c',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      flexDirection:'column', gap:16,
+    }}>
+      <button onClick={()=>setFocusScreen(null)} style={{
+        position:'absolute', top:20, left:20, background:'rgba(255,255,255,0.1)',
+        border:'1px solid rgba(255,255,255,0.2)', color:'#fff', padding:'8px 14px',
+        borderRadius:8, cursor:'pointer', fontSize:13,
+      }}>← 캔버스로</button>
+      <IOSDevice width={402} height={874} dark={true}>
+        <Screen team={team} selectedTeam={team}
+          onSelect={()=>setFocusScreen('editor')}
+          onBack={()=>setFocusScreen(null)}
+          onShare={()=>setFocusScreen('share')} />
+      </IOSDevice>
+      {editMode && <TweaksPanel tweaks={tweaks} setTweak={setTweak} />}
+    </div>
+  );
+}
+
+function TeamSwatches() {
+  return (
+    <div style={{
+      padding:'22px 28px', display:'grid', gridTemplateColumns:'repeat(5, 1fr)',
+      gap:14, height:'100%', boxSizing:'border-box', background:'#0a0a0c',
+    }}>
+      {TEAMS.map(t => (
+        <div key={t.id} style={{display:'flex', flexDirection:'column', gap:6}}>
+          <div style={{
+            height:44, borderRadius:8, background:t.primary, position:'relative', overflow:'hidden',
+          }}>
+            <div style={{position:'absolute', right:0, top:0, bottom:0, width:'35%',
+              background: t.secondary === '#FFFFFF' ? '#fff' : t.secondary,
+              opacity: 0.85}}/>
+          </div>
+          <div style={{fontFamily:'Space Grotesk, sans-serif', fontSize:11, fontWeight:700,
+            color:'#fff', letterSpacing:0.5}}>{t.short}</div>
+          <div style={{fontFamily:'Space Grotesk, sans-serif', fontSize:9,
+            color:'#666', letterSpacing:1}}>{t.primary.toUpperCase()}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, setTweak }) {
+  return (
+    <div style={{
+      position:'fixed', bottom:20, right:20, width:280, zIndex:100,
+      background:'#16161a', color:'#fff', border:'1px solid #2a2a30',
+      borderRadius:14, padding:14, fontFamily:'IBM Plex Sans KR, sans-serif',
+      boxShadow:'0 20px 50px rgba(0,0,0,0.4)',
+    }}>
+      <div style={{fontSize:11, letterSpacing:2, color:'#888', fontWeight:700, marginBottom:10,
+        fontFamily:'Space Grotesk, sans-serif'}}>TWEAKS</div>
+      <div style={{fontSize:12, color:'#aaa', marginBottom:6}}>팀 선택</div>
+      <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:4}}>
+        {TEAMS.map(t => (
+          <button key={t.id} onClick={()=>setTweak('team_id', t.id)} style={{
+            aspectRatio:'1/1', border: tweaks.team_id===t.id ? '2px solid #fff' : '1px solid #2a2a30',
+            background:t.primary, borderRadius:6, cursor:'pointer', color:'#fff',
+            fontFamily:'Space Grotesk, sans-serif', fontSize:9, fontWeight:700,
+            padding:0,
+          }}>{t.short}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
